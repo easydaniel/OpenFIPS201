@@ -31,6 +31,8 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
+import org.globalplatform.GPSystem;
+import org.globalplatform.SecureChannel;
 
 /**
  * ChainBuffer supports reading and writing of buffers larger than a single APDU frame. It takes
@@ -159,6 +161,19 @@ final class ChainBuffer {
   void setOutgoing(byte[] buffer, short offset, short length, boolean clearOnCompletion) {
 
     reset();
+
+    // Wrap response if messaging in secure channel: either R_MAC or R_ENCRYPTION is set
+    SecureChannel sc = GPSystem.getSecureChannel();
+    byte mask = SecureChannel.R_MAC | SecureChannel.R_ENCRYPTION;
+    if ((sc.getSecurityLevel() & SecureChannel.AUTHENTICATED) != 0
+        && (sc.getSecurityLevel() & mask) != 0) {
+      // Add status word to build response mac
+      // TODO: check boundaries of buffer & length
+      buffer[length] = (byte) 0x90;
+      buffer[(short) (length + 1)] = (byte) 0x00;
+      length += 2;
+      length = sc.wrap(buffer, (byte) 0x00, length);
+    }
 
     dataPtr[0] = buffer;
 
